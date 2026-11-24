@@ -94,6 +94,13 @@ namespace TShockAPI
 		/// <returns>A string IPv4 address.</returns>
 		public string GetRealIP(string mess)
 		{
+			if (System.Net.IPEndPoint.TryParse(mess, out var endPoint))
+			{
+				var address = endPoint.Address;
+				if (address.IsIPv4MappedToIPv6)
+					address = address.MapToIPv4();
+				return address.ToString();
+			}
 			return mess.Split(':')[0];
 		}
 
