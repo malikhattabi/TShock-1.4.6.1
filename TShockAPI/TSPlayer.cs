@@ -2516,7 +2516,14 @@ namespace TShockAPI
 			if (!RealPlayer || !ConnectionAlive)
 				return;
 
-			Client.Socket.AsyncSend(data, 0, data.Length, Client.ServerWriteCallBack);
+			try
+			{
+				Client.Socket.AsyncSend(data, 0, data.Length, Client.ServerWriteCallBack);
+			}
+			catch (Exception ex) when (ex is System.IO.IOException || ex is InvalidOperationException || ex is System.Net.Sockets.SocketException)
+			{
+				Client.PendingTermination = true;
+			}
 		}
 
 		/// <summary>
