@@ -1,0 +1,3 @@
+[submodule "TerrariaServerAPI"]
+	path = TerrariaServerAPI
+	url = https://github.com/malikhattabi/TSAPI-1.4.6.1.git
