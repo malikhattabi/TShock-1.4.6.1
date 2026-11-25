@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, osx-x64, linux-x64, linux-arm64, linux-arm]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Install gettext
+        run: sudo apt-get update && sudo apt-get install -y gettext
+
+      - name: Publish installer
+        run: dotnet publish TShockInstaller -r ${{ matrix.rid }} -f net9.0 -c Release -p:PublishSingleFile=true --self-contained
+
+      - name: Publish server
+        run: dotnet publish TShockLauncher -r ${{ matrix.rid }} -f net9.0 -c Release -p:PublishSingleFile=true --no-self-contained
+
+      - name: Assemble and zip package
+        env:
+          RID: ${{ matrix.rid }}
+        run: |
+          publish_dir="TShockLauncher/bin/Release/net9.0/$RID/publish"
+          installer_dir="TShockInstaller/bin/Release/net9.0/$RID/publish"
+          cp -a "$installer_dir/." "$publish_dir/"
+          if [[ "$RID" != "win-x64" ]]; then
+            chmod +x "$publish_dir/TShock.Server"
+          fi
+          mkdir -p release-assets
+          (cd "$publish_dir" && zip -qr "$GITHUB_WORKSPACE/release-assets/TShock-${GITHUB_REF_NAME}-${RID}.zip" .)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.rid }}
+          path: release-assets/*.zip
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Create GitHub release and upload packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG_NAME" >/dev/null 2>&1 || \
+            gh release create "$TAG_NAME" --verify-tag --generate-notes --title "TShock $TAG_NAME"
+          gh release upload "$TAG_NAME" release-assets/*.zip --clobber
